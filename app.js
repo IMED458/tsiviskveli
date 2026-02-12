@@ -1281,13 +1281,14 @@ async function init() {
     setView("stock");
   }
 
+  startRealtimeListeners();
+
   try {
     await ensureBootstrapData();
-    startRealtimeListeners();
     showToast("Firebase კავშირი აქტიურია", "info");
   } catch (e) {
     console.error(e);
-    showToast("Firebase კავშირის შეცდომა", "error");
+    showToast("მონაცემების ინიციალიზაცია ნაწილობრივ შეიზღუდა (Rules/Auth)", "error");
   }
 }
 

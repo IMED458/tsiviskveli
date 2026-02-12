@@ -848,7 +848,7 @@ async function deleteTargetEntity() {
         return;
       }
       await deleteDoc(doc(refs.products, state.deleteTarget.id));
-    } else {
+    } else if (state.deleteTarget.type === "employee") {
       const usedInLogs = state.data.logs.some((l) => l.employeeId === state.deleteTarget.id);
       if (usedInLogs) {
         showToast("თანამშრომელი ლოგში გამოიყენება და წაშლა შეუძლებელია", "error");
@@ -863,7 +863,7 @@ async function deleteTargetEntity() {
         tx.delete(doc(refs.employees, emp.id));
         tx.delete(doc(refs.employeeCodes, normalizeCode(emp.code)));
       });
-    } else {
+    } else if (state.deleteTarget.type === "log") {
       const logRef = doc(refs.logs, state.deleteTarget.id);
       await runTransaction(db, async (tx) => {
         const logSnap = await tx.get(logRef);
@@ -889,6 +889,8 @@ async function deleteTargetEntity() {
         });
         tx.delete(logRef);
       });
+    } else {
+      throw new Error("წაშლის ტიპი არასწორია");
     }
 
     closeDeleteModal();

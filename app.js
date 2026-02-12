@@ -109,6 +109,10 @@ function normalizeCode(code) {
   return String(code || "").trim().toLowerCase();
 }
 
+function storageToKey(storage) {
+  return storage === "ბოქსი" ? "boxStock" : "twoSpaceStock";
+}
+
 function showToast(message, type = "success") {
   const toast = document.getElementById("toast");
   const content = document.getElementById("toast-content");
@@ -417,6 +421,12 @@ function renderLogView() {
           <span class="font-extrabold ${isIn ? "text-emerald-700" : "text-orange-700"}">${isIn ? "+" : "-"}${formatKg(log.quantityKg)}</span>
         </div>
         ${log.comment ? `<p class="mt-2 text-xs italic text-slate-500">💬 ${escapeHtml(log.comment)}</p>` : ""}
+        ${state.role === "admin" ? `
+        <div class="mt-3 flex gap-2">
+          <button class="edit-log rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-semibold text-blue-700" data-id="${log.id}">ლოგის რედაქტირება</button>
+          <button class="delete-log rounded-lg bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-700" data-id="${log.id}">ლოგის წაშლა</button>
+        </div>
+        ` : ""}
       </article>
     `;
     })
@@ -812,6 +822,8 @@ function openDeleteModal(target) {
   const text = document.getElementById("delete-text");
   if (target.type === "product") {
     text.textContent = `ნამდვილად გსურთ პროდუქტის "${target.name}" წაშლა?`;
+  } else if (target.type === "log") {
+    text.textContent = "ნამდვილად გსურთ ამ ლოგის ჩანაწერის წაშლა?";
   } else {
     text.textContent = `ნამდვილად გსურთ თანამშრომლის "${target.name}" წაშლა?`;
   }
@@ -851,6 +863,32 @@ async function deleteTargetEntity() {
         tx.delete(doc(refs.employees, emp.id));
         tx.delete(doc(refs.employeeCodes, normalizeCode(emp.code)));
       });
+    } else {
+      const logRef = doc(refs.logs, state.deleteTarget.id);
+      await runTransaction(db, async (tx) => {
+        const logSnap = await tx.get(logRef);
+        if (!logSnap.exists()) throw new Error("ლოგი ვერ მოიძებნა");
+
+        const log = logSnap.data();
+        const productRef = doc(refs.products, log.productId);
+        const productSnap = await tx.get(productRef);
+        if (!productSnap.exists()) throw new Error("პროდუქტი ვერ მოიძებნა");
+
+        const key = storageToKey(log.storage);
+        const current = normalizeKg(productSnap.data()[key] || 0);
+        const qty = normalizeKg(log.quantityKg || 0);
+
+        const nextStock = log.operationType === "შეტანა" ? current - qty : current + qty;
+        if (nextStock < 0) {
+          throw new Error("ლოგის წაშლა ვერ ხერხდება, რადგან მარაგი უარყოფითში გადავა");
+        }
+
+        tx.update(productRef, {
+          [key]: normalizeKg(nextStock),
+          updatedAt: nowIso()
+        });
+        tx.delete(logRef);
+      });
     }
 
     closeDeleteModal();
@@ -870,15 +908,48 @@ function openEditModal(target) {
     title.textContent = "პროდუქტის რედაქტირება";
     fields.innerHTML = `<input id="edit-product-name" type="text" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500" />`;
   } else {
+    if (target.type === "log") {
+      title.textContent = "ლოგის რედაქტირება";
+      fields.innerHTML = `
+        <select id="edit-log-type" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500">
+          <option value="შეტანა">შეტანა</option>
+          <option value="გატანა">გატანა</option>
+        </select>
+        <select id="edit-log-storage" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500">
+          <option value="ბოქსი">ბოქსი</option>
+          <option value="ორ სივრციანი">ორ სივრციანი</option>
+        </select>
+        <select id="edit-log-product" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500"></select>
+        <select id="edit-log-employee" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500"></select>
+        <input id="edit-log-qty" type="number" step="0.01" min="0.01" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500" />
+        <textarea id="edit-log-comment" rows="2" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500" placeholder="კომენტარი (სურვილისამებრ)"></textarea>
+      `;
+    } else {
     title.textContent = "თანამშრომლის რედაქტირება";
     fields.innerHTML = `
       <input id="edit-emp-first" type="text" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500" />
       <input id="edit-emp-last" type="text" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500" />
       <input id="edit-emp-code" type="text" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 outline-none transition focus:border-blue-500" />
     `;
+    }
   }
   if (target.type === "product") {
     document.getElementById("edit-product-name").value = target.name;
+  } else if (target.type === "log") {
+    const productSelect = document.getElementById("edit-log-product");
+    const employeeSelect = document.getElementById("edit-log-employee");
+    productSelect.innerHTML = state.data.products
+      .map((p) => `<option value="${p.id}">${escapeHtml(p.name)}</option>`)
+      .join("");
+    employeeSelect.innerHTML = state.data.employees
+      .map((e) => `<option value="${e.id}">${escapeHtml(fullName(e))}</option>`)
+      .join("");
+    document.getElementById("edit-log-type").value = target.operationType;
+    document.getElementById("edit-log-storage").value = target.storage;
+    document.getElementById("edit-log-product").value = target.productId;
+    document.getElementById("edit-log-employee").value = target.employeeId;
+    document.getElementById("edit-log-qty").value = normalizeKg(target.quantityKg);
+    document.getElementById("edit-log-comment").value = target.comment || "";
   } else {
     document.getElementById("edit-emp-first").value = target.firstName;
     document.getElementById("edit-emp-last").value = target.lastName;
@@ -916,7 +987,7 @@ async function saveEditModal() {
         nameLower: name.toLowerCase(),
         updatedAt: nowIso()
       });
-    } else {
+    } else if (state.editTarget.type === "employee") {
       const firstName = document.getElementById("edit-emp-first").value.trim();
       const lastName = document.getElementById("edit-emp-last").value.trim();
       const code = document.getElementById("edit-emp-code").value.trim();
@@ -955,6 +1026,82 @@ async function saveEditModal() {
           employeeId: empId,
           code,
           createdAt: currentEmp.createdAt || nowIso()
+        });
+      });
+    } else {
+      const operationType = document.getElementById("edit-log-type").value;
+      const storage = document.getElementById("edit-log-storage").value;
+      const productId = document.getElementById("edit-log-product").value;
+      const employeeId = document.getElementById("edit-log-employee").value;
+      const quantityKg = normalizeKg(document.getElementById("edit-log-qty").value);
+      const comment = document.getElementById("edit-log-comment").value.trim();
+
+      if (!["შეტანა", "გატანა"].includes(operationType) || !["ბოქსი", "ორ სივრციანი"].includes(storage) || !productId || !employeeId || quantityKg <= 0) {
+        showToast("ლოგის მონაცემები არასწორია", "error");
+        return;
+      }
+
+      const logRef = doc(refs.logs, state.editTarget.id);
+      await runTransaction(db, async (tx) => {
+        const logSnap = await tx.get(logRef);
+        if (!logSnap.exists()) throw new Error("ლოგი ვერ მოიძებნა");
+
+        const oldLog = logSnap.data();
+        const oldProductRef = doc(refs.products, oldLog.productId);
+        const newProductRef = doc(refs.products, productId);
+        const employeeRef = doc(refs.employees, employeeId);
+
+        const [oldProdSnap, newProdSnap, empSnap] = await Promise.all([
+          tx.get(oldProductRef),
+          tx.get(newProductRef),
+          tx.get(employeeRef)
+        ]);
+
+        if (!oldProdSnap.exists() || !newProdSnap.exists()) throw new Error("პროდუქტი ვერ მოიძებნა");
+        if (!empSnap.exists()) throw new Error("თანამშრომელი ვერ მოიძებნა");
+
+        const oldKey = storageToKey(oldLog.storage);
+        const newKey = storageToKey(storage);
+        const oldQty = normalizeKg(oldLog.quantityKg || 0);
+
+        const stockMap = new Map();
+        const oldProductId = oldLog.productId;
+        const newProductId = productId;
+
+        const oldCurrent = normalizeKg(oldProdSnap.data()[oldKey] || 0);
+        const reversedOld = oldLog.operationType === "შეტანა" ? oldCurrent - oldQty : oldCurrent + oldQty;
+        if (reversedOld < 0) throw new Error("რედაქტირება ვერ ხერხდება, რადგან მარაგი უარყოფითში გადავა");
+        stockMap.set(`${oldProductId}:${oldKey}`, reversedOld);
+
+        const readNewBase = () => {
+          const key = `${newProductId}:${newKey}`;
+          if (stockMap.has(key)) return stockMap.get(key);
+          return normalizeKg(newProdSnap.data()[newKey] || 0);
+        };
+
+        const newBase = readNewBase();
+        const appliedNew = operationType === "შეტანა" ? newBase + quantityKg : newBase - quantityKg;
+        if (appliedNew < 0) throw new Error("არასაკმარისი მარაგი არჩეული ცვლილებისთვის");
+        stockMap.set(`${newProductId}:${newKey}`, appliedNew);
+
+        for (const [k, value] of stockMap.entries()) {
+          const [pId, sKey] = k.split(":");
+          tx.update(doc(refs.products, pId), {
+            [sKey]: normalizeKg(value),
+            updatedAt: nowIso()
+          });
+        }
+
+        tx.update(logRef, {
+          operationType,
+          storage,
+          productId,
+          productName: newProdSnap.data().name,
+          employeeId,
+          employeeName: `${empSnap.data().firstName} ${empSnap.data().lastName}`,
+          quantityKg,
+          comment,
+          updatedAt: nowIso()
         });
       });
     }
@@ -1067,6 +1214,22 @@ function bindEvents() {
     if (e.target.classList.contains("delete-product")) {
       const product = getProductById(id);
       if (product) openDeleteModal({ type: "product", id: product.id, name: product.name });
+    }
+  });
+
+  document.getElementById("log-list").addEventListener("click", (e) => {
+    const id = e.target.dataset.id;
+    if (!id) return;
+
+    if (e.target.classList.contains("edit-log")) {
+      if (!requireAdmin("ლოგის რედაქტირება")) return;
+      const log = state.data.logs.find((l) => l.id === id);
+      if (log) openEditModal({ type: "log", ...log });
+    }
+    if (e.target.classList.contains("delete-log")) {
+      if (!requireAdmin("ლოგის წაშლა")) return;
+      const log = state.data.logs.find((l) => l.id === id);
+      if (log) openDeleteModal({ type: "log", id: log.id });
     }
   });
 

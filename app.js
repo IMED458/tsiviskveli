@@ -182,11 +182,9 @@ function setRole(role) {
 
   const opSubmit = document.getElementById("op-submit-btn");
   if (opSubmit) {
-    const canOperate = role === "admin";
-    opSubmit.disabled = !canOperate;
-    opSubmit.classList.toggle("opacity-50", !canOperate);
-    opSubmit.classList.toggle("cursor-not-allowed", !canOperate);
-    opSubmit.textContent = canOperate ? "დადასტურება" : "მხოლოდ ადმინი ასრულებს ოპერაციას";
+    opSubmit.disabled = false;
+    opSubmit.classList.remove("opacity-50", "cursor-not-allowed");
+    opSubmit.textContent = "დადასტურება";
   }
 }
 
@@ -596,8 +594,6 @@ function startRealtimeListeners() {
 }
 
 function openCodeModal() {
-  if (!requireAdmin("შეტანა/გატანის შესრულება")) return;
-
   const productId = document.getElementById("op-product").value;
   const quantity = Number(document.getElementById("op-quantity").value);
   const comment = document.getElementById("op-comment").value.trim();

@@ -24,7 +24,7 @@ const DEFAULT_PRODUCTS = [
 
 const DEFAULT_EMPLOYEES = [{ firstName: "ნიკა", lastName: "ღაღაშვილი", code: "1" }];
 const ADMIN_SESSION_KEY = "cheese_inventory_admin_session_v1";
-const ADMIN_PASSWORD = "1234";
+const ADMIN_PASSWORD = "tamuna1968110";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD8Nv1Cmqy-jwFqxAHQrdxD_TslkGdSRuI",

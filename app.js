@@ -23,6 +23,8 @@ const DEFAULT_PRODUCTS = [
 ];
 
 const DEFAULT_EMPLOYEES = [{ firstName: "ნიკა", lastName: "ღაღაშვილი", code: "1" }];
+const ADMIN_SESSION_KEY = "cheese_inventory_admin_session_v1";
+const ADMIN_PASSWORD = "1234";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD8Nv1Cmqy-jwFqxAHQrdxD_TslkGdSRuI",
@@ -67,7 +69,8 @@ const state = {
     dateTo: ""
   },
   deleteTarget: null,
-  editTarget: null
+  editTarget: null,
+  adminAuthenticated: false
 };
 
 const refs = {
@@ -122,6 +125,18 @@ function showToast(message, type = "success") {
   setTimeout(() => toast.classList.add("hidden"), 2600);
 }
 
+function persistAdminSession(enabled) {
+  if (enabled) {
+    localStorage.setItem(ADMIN_SESSION_KEY, "1");
+  } else {
+    localStorage.removeItem(ADMIN_SESSION_KEY);
+  }
+}
+
+function hasAdminSession() {
+  return localStorage.getItem(ADMIN_SESSION_KEY) === "1";
+}
+
 function getProductById(id) {
   return state.data.products.find((p) => p.id === id);
 }
@@ -154,6 +169,43 @@ function setRole(role) {
       setView("stock");
     }
   }
+}
+
+function openAdminLoginModal() {
+  document.getElementById("admin-password-input").value = "";
+  document.getElementById("admin-password-error").classList.add("hidden");
+  document.getElementById("admin-login-modal").classList.remove("hidden");
+  document.getElementById("admin-password-input").focus();
+}
+
+function closeAdminLoginModal() {
+  document.getElementById("admin-login-modal").classList.add("hidden");
+}
+
+function activateAdminSession() {
+  state.adminAuthenticated = true;
+  persistAdminSession(true);
+  setRole("admin");
+  showToast("ადმინ რეჟიმი ჩართულია");
+}
+
+function deactivateAdminSession() {
+  state.adminAuthenticated = false;
+  persistAdminSession(false);
+  setRole("user");
+  showToast("ადმინ რეჟიმი გამოირთო", "info");
+}
+
+function tryAdminLogin() {
+  const password = document.getElementById("admin-password-input").value;
+  const error = document.getElementById("admin-password-error");
+  if (password !== ADMIN_PASSWORD) {
+    error.textContent = "პაროლი არასწორია";
+    error.classList.remove("hidden");
+    return;
+  }
+  closeAdminLoginModal();
+  activateAdminSession();
 }
 
 function setView(viewName) {
@@ -937,7 +989,21 @@ function bindEvents() {
   });
 
   document.getElementById("role-toggle-btn").addEventListener("click", () => {
-    setRole(state.role === "admin" ? "user" : "admin");
+    if (state.role === "admin") {
+      deactivateAdminSession();
+      return;
+    }
+    if (state.adminAuthenticated || hasAdminSession()) {
+      activateAdminSession();
+      return;
+    }
+    openAdminLoginModal();
+  });
+
+  document.getElementById("admin-login-cancel").addEventListener("click", closeAdminLoginModal);
+  document.getElementById("admin-login-confirm").addEventListener("click", tryAdminLogin);
+  document.getElementById("admin-password-input").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") tryAdminLogin();
   });
 
   document.getElementById("stock-search").addEventListener("input", (e) => {
@@ -1020,8 +1086,14 @@ function bindEvents() {
 
 async function init() {
   bindEvents();
-  setRole("user");
-  setView("stock");
+  if (hasAdminSession()) {
+    state.adminAuthenticated = true;
+    setRole("admin");
+    setView("admin");
+  } else {
+    setRole("user");
+    setView("stock");
+  }
 
   try {
     await ensureBootstrapData();

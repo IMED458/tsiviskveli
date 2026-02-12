@@ -171,6 +171,19 @@
       </div>
     </div>
 
+    <div id="admin-login-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-900/55 p-4">
+      <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
+        <h3 class="text-center text-xl font-extrabold text-slate-800">ადმინ ავტორიზაცია</h3>
+        <p class="mb-4 mt-1 text-center text-sm text-slate-600">შეიყვანეთ ადმინის პაროლი</p>
+        <input id="admin-password-input" type="password" class="mb-2 w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-center text-xl font-bold outline-none transition focus:border-blue-500" placeholder="პაროლი" />
+        <p id="admin-password-error" class="mb-3 hidden text-center text-sm font-semibold text-red-600">პაროლი არასწორია</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button id="admin-login-cancel" class="rounded-xl border-2 border-slate-300 px-3 py-3 font-semibold text-slate-700">გაუქმება</button>
+          <button id="admin-login-confirm" class="rounded-xl bg-blue-600 px-3 py-3 font-semibold text-white">შესვლა</button>
+        </div>
+      </div>
+    </div>
+
     <div id="edit-modal" class="hidden fixed inset-0 z-40 flex items-center justify-center bg-slate-900/55 p-4">
       <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
         <h3 id="edit-modal-title" class="mb-3 text-center text-xl font-extrabold text-slate-800"></h3>

@@ -125,6 +125,12 @@ function showToast(message, type = "success") {
   setTimeout(() => toast.classList.add("hidden"), 2600);
 }
 
+function requireAdmin(actionLabel = "ამ ქმედებას") {
+  if (state.role === "admin" && state.adminAuthenticated) return true;
+  showToast(`${actionLabel} შეუძლია მხოლოდ ადმინს`, "error");
+  return false;
+}
+
 function persistAdminSession(enabled) {
   if (enabled) {
     localStorage.setItem(ADMIN_SESSION_KEY, "1");
@@ -168,6 +174,15 @@ function setRole(role) {
     if (state.currentView === "admin") {
       setView("stock");
     }
+  }
+
+  const opSubmit = document.getElementById("op-submit-btn");
+  if (opSubmit) {
+    const canOperate = role === "admin";
+    opSubmit.disabled = !canOperate;
+    opSubmit.classList.toggle("opacity-50", !canOperate);
+    opSubmit.classList.toggle("cursor-not-allowed", !canOperate);
+    opSubmit.textContent = canOperate ? "დადასტურება" : "მხოლოდ ადმინი ასრულებს ოპერაციას";
   }
 }
 
@@ -571,6 +586,8 @@ function startRealtimeListeners() {
 }
 
 function openCodeModal() {
+  if (!requireAdmin("შეტანა/გატანის შესრულება")) return;
+
   const productId = document.getElementById("op-product").value;
   const quantity = Number(document.getElementById("op-quantity").value);
   const comment = document.getElementById("op-comment").value.trim();
@@ -718,6 +735,8 @@ async function continueWithCode() {
 }
 
 async function addProduct() {
+  if (!requireAdmin("პროდუქტის დამატება")) return;
+
   const input = document.getElementById("new-product");
   const name = input.value.trim();
   if (!name) {
@@ -744,6 +763,8 @@ async function addProduct() {
 }
 
 async function addEmployee() {
+  if (!requireAdmin("თანამშრომლის დამატება")) return;
+
   const first = document.getElementById("new-emp-first").value.trim();
   const last = document.getElementById("new-emp-last").value.trim();
   const code = document.getElementById("new-emp-code").value.trim();
@@ -803,6 +824,7 @@ function closeDeleteModal() {
 }
 
 async function deleteTargetEntity() {
+  if (!requireAdmin("წაშლა")) return;
   if (!state.deleteTarget) return;
 
   try {
@@ -872,6 +894,7 @@ function closeEditModal() {
 }
 
 async function saveEditModal() {
+  if (!requireAdmin("რედაქტირება")) return;
   if (!state.editTarget) return;
 
   try {

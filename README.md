@@ -1,153 +1,69 @@
-# ყველის ინვენტარის ვებ-აპი (Responsive, ქართული UI)
+# tsiviskveli
 
-ეს პაკეტი შეიცავს ორ დამოუკიდებელ ვარიანტს:
+ქართულენოვანი responsive ვებ-აპი ყველის მარაგების აღრიცხვისთვის.
 
-1. `frontend-localstorage/` - სრული Frontend დემო, მონაცემებით `LocalStorage`-ში.
-2. `backend-node-sqlite/` - Backend API + SQLite (სრულფასოვანი სერვერული ვარიანტი).
+## GitHub Pages (root)
 
-## 1) Frontend დემო (LocalStorage)
+აპის Pages ვერსია მუშაობს რეპოს root ფაილებით:
+- `index.html`
+- `app.js`
+- `styles.css`
 
-### გაშვება
+URL:
+- `https://imed458.github.io/tsiviskveli/`
 
-```bash
-cd /Users/giorgiimedashvili/Documents/New\ project/cheese-inventory-app/frontend-localstorage
-python3 -m http.server 8080
-```
+## Firebase/Firestore ინტეგრაცია
 
-ბრაუზერში გახსენით:
-`http://localhost:8080`
+აპი უკვე დაკავშირებულია Firestore-სთან (`app.js`-ში მოცემული კონფიგით) და რეალურ დროში მუშაობს.
 
-### რა მუშაობს
+### გამოყენებული კოლექციები
 
-- ორი საცავი: `ბოქსი`, `ორ სივრციანი`
-- პროდუქტების CRUD (ადმინი)
-- თანამშრომლების CRUD + უნიკალური კოდი (ადმინი)
-- ოპერაცია: `შეტანა` / `გატანა`
-- კოდით დადასტურება მოდალში: `შეიყვანე თანამშრომლის კოდი`
-- არასწორი კოდის ბლოკირება
-- სწორი კოდით ოპერაციის შესრულება და ლოგში თანამშრომლის სრული სახელის შენახვა
-- ლოგი ახალი -> ძველი, ზუსტი დროით (საათი/წუთი/წამი)
-- ლოგის ფილტრები:
-  - პროდუქტი
-  - თანამშრომელი
-  - ოპერაციის ტიპი
-  - საცავი
-  - თარიღის დიაპაზონი (`-დან`, `-მდე`)
-- სწრაფი ძებნა პროდუქტის სახელით
-- `გატანა` ვერ შესრულდება თუ მარაგი ნაკლებია
-- ერთეული ყველგან: `კგ` (decimal მხარდაჭერით, მაგ: `1.25`)
+- `products`
+- `employees`
+- `employeeCodes`
+- `logs`
+- `operations`
+- `meta/bootstrap`
 
-## 2) Backend + SQLite ვარიანტი
+### ლოგიკა
 
-### გაშვება
-
-```bash
-cd /Users/giorgiimedashvili/Documents/New\ project/cheese-inventory-app/backend-node-sqlite
-npm install
-npm run dev
-```
-
-API ხელმისაწვდომია:
-`http://localhost:4000`
-
-### მთავარი Endpoint-ები
-
-- `GET /api/bootstrap` - პროდუქტები, თანამშრომლები, ლოგები
-- `POST /api/products`
-- `PUT /api/products/:id`
-- `DELETE /api/products/:id`
-- `POST /api/employees`
-- `PUT /api/employees/:id`
-- `DELETE /api/employees/:id`
-- `POST /api/operations` - ატომური ოპერაცია (მარაგის განახლება + ლოგის ჩანაწერი ერთ ტრანზაქციაში)
-- `GET /api/logs` - ფილტრირებადი ლოგი
-
-## მონაცემთა სტრუქტურა
-
-### Products
-
-```json
-{
-  "id": "prd_xxx",
-  "name": "სულგუნი",
-  "stocks": {
-    "box": 10.5,
-    "twoSpace": 7.25
-  },
-  "createdAt": "ISO-თარიღი",
-  "updatedAt": "ISO-თარიღი"
-}
-```
-
-### Employees
-
-```json
-{
-  "id": "emp_xxx",
-  "firstName": "ნიკა",
-  "lastName": "ღაღაშვილი",
-  "code": "1",
-  "createdAt": "ISO-თარიღი"
-}
-```
-
-### Logs
-
-```json
-{
-  "id": "log_xxx",
-  "operationId": "op_xxx",
-  "timestamp": "ISO-თარიღი",
-  "employeeId": "emp_xxx",
-  "employeeName": "ნიკა ღაღაშვილი",
-  "operationType": "შეტანა",
-  "productId": "prd_xxx",
-  "productName": "სულგუნი",
-  "storage": "ბოქსი",
-  "quantityKg": 1.25,
-  "comment": "სურვილისამებრ"
-}
-```
-
-### Users (როლები)
-
-ამ დემოში როლი UI რეჟიმით იცვლება:
-
-```json
-{
-  "role": "user | admin"
-}
-```
-
-სერვერულ/პროექტულ ვერსიაში რეკომენდებულია:
-
-```json
-{
-  "id": "usr_xxx",
-  "username": "admin",
-  "role": "admin | user",
-  "passwordHash": "..."
-}
-```
-
-## ატომურობა და დუბლირების პრევენცია
-
-- Frontend ვერსიაში თითო ოპერაციას აქვს `operationId`; უკვე დამუშავებული `operationId` მეორედ აღარ სრულდება.
-- ღილაკები იბლოკება დამუშავებისას, რომ ორმაგი დაჭერა ვერ გამოიწვიოს დუბლირება.
-- Backend ვერსიაში `POST /api/operations` არის SQLite ტრანზაქცია:
-  - ამოწმებს თანამშრომლის კოდს
+- საწყისი seed ერთჯერადად კეთდება (`meta/bootstrap` ტრანზაქციით)
+- ოპერაცია (`შეტანა/გატანა`) სრულდება ატომურად Firestore transaction-ით:
+  - ამოწმებს თანამშრომლის კოდს (`employeeCodes`)
   - ამოწმებს მარაგს
   - ანახლებს მარაგს
   - წერს ლოგს
-  - ყველაფერი სრულდება ერთ ატომურ ოპერაციად
+  - წერს `operations/{operationId}` დუბლირების პრევენციისთვის
 
-## Responsive დიზაინი
+## ფუნქციონალი
 
-- მობილურზე: დიდი ღილაკები, ქვედა ნავიგაცია, ერთი სვეტი
-- iPad-ზე: grid-ები ფართოვდება 2/3 სვეტად, უკეთესი კითხვადობა
-- დესკტოპზე: მაქს. სიგანე, კარტების/ფილტრების გაფართოებული განლაგება
+- ორი საცავი: `ბოქსი`, `ორ სივრციანი`
+- პროდუქტების მართვა (ადმინი): დამატება/რედაქტირება/წაშლა
+- თანამშრომლების მართვა (ადმინი): დამატება/რედაქტირება/წაშლა
+- თანამშრომლის უნიკალური კოდი (რიცხვი ან ალფანუმერული)
+- კოდით დადასტურება ოპერაციისას
+- ლოგი ზუსტი დროით (წამით), ახალი → ძველი
+- ლოგის ფილტრები: პროდუქტი, თანამშრომელი, ოპერაცია, საცავი, თარიღის დიაპაზონი
+- სწრაფი ძებნა პროდუქტის სახელით
+- `კგ` ერთეული ყველგან, decimal მხარდაჭერით
 
-## Firebase
+## რეკომენდებული Firestore Rules (ტესტ/დემო)
 
-ამ რეალიზაციაში Firebase არ არის გამოყენებული (არჩეულია Node.js + SQLite ვარიანტი).
-თუ გინდა, შემიძლია იმავე UI-ზე მესამე ვარიანტად Firebase/Firestore ინტეგრაციაც პირდაპირ დავამატო.
+```txt
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+შენიშვნა: production-ში ჩაანაცვლე ავთენტიფიკაციაზე დაფუძნებული წესებით.
+
+## ალტერნატიული ვარიანტები
+
+რეპოში დამატებით შენახულია:
+- `frontend-localstorage/` - LocalStorage დემო
+- `backend-node-sqlite/` - Node.js + SQLite API

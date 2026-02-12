@@ -1,4 +1,18 @@
-const STORAGE_KEY = "cheese_inventory_v1";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { getAnalytics, isSupported as analyticsSupported } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-analytics.js";
+import {
+  getFirestore,
+  collection,
+  doc,
+  setDoc,
+  addDoc,
+  getDoc,
+  onSnapshot,
+  runTransaction,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
 
 const DEFAULT_PRODUCTS = [
   { name: "სულგუნი" },
@@ -8,12 +22,35 @@ const DEFAULT_PRODUCTS = [
   { name: "ტომი" }
 ];
 
-const DEFAULT_EMPLOYEES = [
-  { firstName: "ნიკა", lastName: "ღაღაშვილი", code: "1" }
-];
+const DEFAULT_EMPLOYEES = [{ firstName: "ნიკა", lastName: "ღაღაშვილი", code: "1" }];
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD8Nv1Cmqy-jwFqxAHQrdxD_TslkGdSRuI",
+  authDomain: "tsiviskveli-96330.firebaseapp.com",
+  projectId: "tsiviskveli-96330",
+  storageBucket: "tsiviskveli-96330.firebasestorage.app",
+  messagingSenderId: "964624790385",
+  appId: "1:964624790385:web:4532aaded064991cfd7cd0",
+  measurementId: "G-ZDD9ZWFKGK"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+analyticsSupported()
+  .then((ok) => {
+    if (ok) getAnalytics(app);
+  })
+  .catch(() => {
+    // Analytics optional in this app.
+  });
 
 const state = {
-  data: null,
+  data: {
+    products: [],
+    employees: [],
+    logs: []
+  },
   currentView: "stock",
   role: "user",
   selectedOperationType: "შეტანა",
@@ -33,10 +70,14 @@ const state = {
   editTarget: null
 };
 
-function genId(prefix) {
-  const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-  return `${prefix}_${id}`;
-}
+const refs = {
+  products: collection(db, "products"),
+  employees: collection(db, "employees"),
+  logs: collection(db, "logs"),
+  operations: collection(db, "operations"),
+  employeeCodes: collection(db, "employeeCodes"),
+  metaBootstrap: doc(db, "meta", "bootstrap")
+};
 
 function nowIso() {
   return new Date().toISOString();
@@ -57,60 +98,12 @@ function escapeHtml(value) {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replaceAll("\"", "&quot;")
+    .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
 
-function seedData() {
-  const createdAt = nowIso();
-  return {
-    version: 1,
-    processedOperationIds: [],
-    products: DEFAULT_PRODUCTS.map((p) => ({
-      id: genId("prd"),
-      name: p.name,
-      stocks: {
-        box: 0,
-        twoSpace: 0
-      },
-      createdAt,
-      updatedAt: createdAt
-    })),
-    employees: DEFAULT_EMPLOYEES.map((e) => ({
-      id: genId("emp"),
-      firstName: e.firstName,
-      lastName: e.lastName,
-      code: e.code,
-      createdAt
-    })),
-    logs: []
-  };
-}
-
-function loadData() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) {
-    const seeded = seedData();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-    return seeded;
-  }
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed.products || !parsed.employees || !parsed.logs) {
-      throw new Error("დაზიანებული მონაცემები");
-    }
-    parsed.processedOperationIds = parsed.processedOperationIds || [];
-    return parsed;
-  } catch (error) {
-    const seeded = seedData();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-    return seeded;
-  }
-}
-
-function saveData(nextData) {
-  state.data = nextData;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nextData));
+function normalizeCode(code) {
+  return String(code || "").trim().toLowerCase();
 }
 
 function showToast(message, type = "success") {
@@ -133,8 +126,8 @@ function getProductById(id) {
   return state.data.products.find((p) => p.id === id);
 }
 
-function getEmployeeByCode(code) {
-  return state.data.employees.find((e) => e.code.toLowerCase() === code.toLowerCase());
+function getEmployeeById(id) {
+  return state.data.employees.find((e) => e.id === id);
 }
 
 function fullName(emp) {
@@ -303,7 +296,7 @@ function logPassesFilters(log) {
   if (state.filters.type && log.operationType !== state.filters.type) return false;
   if (state.filters.storage && log.storage !== state.filters.storage) return false;
 
-  const day = log.timestamp.slice(0, 10);
+  const day = String(log.timestamp || "").slice(0, 10);
   if (state.filters.dateFrom && day < state.filters.dateFrom) return false;
   if (state.filters.dateTo && day > state.filters.dateTo) return false;
 
@@ -432,57 +425,97 @@ function renderCurrentView() {
   }
 }
 
-function upsertProcessedOperationIds(ids, opId) {
-  const next = [...ids, opId];
-  return next.length > 2000 ? next.slice(next.length - 2000) : next;
+async function ensureBootstrapData() {
+  await runTransaction(db, async (tx) => {
+    const bootstrapSnap = await tx.get(refs.metaBootstrap);
+    if (bootstrapSnap.exists()) return;
+
+    const ts = nowIso();
+    for (const product of DEFAULT_PRODUCTS) {
+      const productRef = doc(refs.products);
+      tx.set(productRef, {
+        name: product.name,
+        nameLower: product.name.toLowerCase(),
+        boxStock: 0,
+        twoSpaceStock: 0,
+        createdAt: ts,
+        updatedAt: ts
+      });
+    }
+
+    for (const employee of DEFAULT_EMPLOYEES) {
+      const empRef = doc(refs.employees);
+      const codeLower = normalizeCode(employee.code);
+      const codeRef = doc(refs.employeeCodes, codeLower);
+      tx.set(empRef, {
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        code: employee.code,
+        codeLower,
+        createdAt: ts
+      });
+      tx.set(codeRef, {
+        employeeId: empRef.id,
+        code: employee.code,
+        createdAt: ts
+      });
+    }
+
+    tx.set(refs.metaBootstrap, {
+      seeded: true,
+      seededAt: ts
+    });
+  });
 }
 
-function applyOperationAtomic({ operationId, productId, operationType, storage, quantityKg, employee, comment }) {
-  const snapshot = loadData();
-  if (snapshot.processedOperationIds.includes(operationId)) {
-    return { ok: false, error: "ეს ოპერაცია უკვე დაფიქსირებულია" };
-  }
-
-  const productIndex = snapshot.products.findIndex((p) => p.id === productId);
-  if (productIndex === -1) return { ok: false, error: "პროდუქტი ვერ მოიძებნა" };
-
-  const product = snapshot.products[productIndex];
-  const key = storage === "ბოქსი" ? "box" : "twoSpace";
-  const current = normalizeKg(product.stocks[key]);
-  const qty = normalizeKg(quantityKg);
-
-  if (operationType === "გატანა" && qty > current) {
-    return { ok: false, error: `არასაკმარისი მარაგი. ხელმისაწვდომია ${formatKg(current)}` };
-  }
-
-  const nextAmount = operationType === "შეტანა" ? current + qty : current - qty;
-  const updatedProduct = {
-    ...product,
-    stocks: {
-      ...product.stocks,
-      [key]: normalizeKg(nextAmount)
-    },
-    updatedAt: nowIso()
-  };
-
-  snapshot.products[productIndex] = updatedProduct;
-  snapshot.logs.push({
-    id: genId("log"),
-    operationId,
-    timestamp: nowIso(),
-    employeeId: employee.id,
-    employeeName: fullName(employee),
-    operationType,
-    productId: product.id,
-    productName: product.name,
-    storage,
-    quantityKg: qty,
-    comment: comment || ""
+function startRealtimeListeners() {
+  onSnapshot(refs.products, (snapshot) => {
+    state.data.products = snapshot.docs
+      .map((d) => ({
+        id: d.id,
+        name: d.data().name || "",
+        stocks: {
+          box: normalizeKg(d.data().boxStock || 0),
+          twoSpace: normalizeKg(d.data().twoSpaceStock || 0)
+        },
+        createdAt: d.data().createdAt || "",
+        updatedAt: d.data().updatedAt || ""
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name, "ka"));
+    renderCurrentView();
   });
 
-  snapshot.processedOperationIds = upsertProcessedOperationIds(snapshot.processedOperationIds, operationId);
-  saveData(snapshot);
-  return { ok: true };
+  onSnapshot(refs.employees, (snapshot) => {
+    state.data.employees = snapshot.docs
+      .map((d) => ({
+        id: d.id,
+        firstName: d.data().firstName || "",
+        lastName: d.data().lastName || "",
+        code: d.data().code || "",
+        codeLower: d.data().codeLower || ""
+      }))
+      .sort((a, b) => fullName(a).localeCompare(fullName(b), "ka"));
+    renderCurrentView();
+  });
+
+  onSnapshot(refs.logs, (snapshot) => {
+    state.data.logs = snapshot.docs
+      .map((d) => ({
+        id: d.id,
+        operationId: d.data().operationId || "",
+        timestamp: d.data().timestamp || "",
+        employeeId: d.data().employeeId || "",
+        employeeName: d.data().employeeName || "",
+        operationType: d.data().operationType || "",
+        productId: d.data().productId || "",
+        productName: d.data().productName || "",
+        storage: d.data().storage || "",
+        quantityKg: normalizeKg(d.data().quantityKg || 0),
+        comment: d.data().comment || ""
+      }))
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    renderCurrentView();
+  });
 }
 
 function openCodeModal() {
@@ -512,7 +545,7 @@ function openCodeModal() {
   }
 
   state.pendingOperation = {
-    operationId: genId("op"),
+    operationId: `op_${crypto.randomUUID()}`,
     productId,
     quantityKg: normalizeKg(quantity),
     comment,
@@ -530,6 +563,66 @@ function closeCodeModal() {
   document.getElementById("code-modal").classList.add("hidden");
 }
 
+async function performOperationWithTransaction({ operationId, productId, operationType, storage, quantityKg, comment, code }) {
+  const codeLower = normalizeCode(code);
+  const opRef = doc(refs.operations, operationId);
+  const codeRef = doc(refs.employeeCodes, codeLower);
+  const productRef = doc(refs.products, productId);
+
+  await runTransaction(db, async (tx) => {
+    const opSnap = await tx.get(opRef);
+    if (opSnap.exists()) throw new Error("ეს ოპერაცია უკვე დაფიქსირებულია");
+
+    const codeSnap = await tx.get(codeRef);
+    if (!codeSnap.exists()) throw new Error("არასწორი კოდი. სცადეთ თავიდან");
+
+    const employeeId = codeSnap.data().employeeId;
+    const empRef = doc(refs.employees, employeeId);
+    const empSnap = await tx.get(empRef);
+    if (!empSnap.exists()) throw new Error("თანამშრომელი ვერ მოიძებნა");
+
+    const productSnap = await tx.get(productRef);
+    if (!productSnap.exists()) throw new Error("პროდუქტი ვერ მოიძებნა");
+
+    const key = storage === "ბოქსი" ? "boxStock" : "twoSpaceStock";
+    const currentStock = normalizeKg(productSnap.data()[key] || 0);
+    const qty = normalizeKg(quantityKg);
+
+    if (operationType === "გატანა" && qty > currentStock) {
+      throw new Error(`არასაკმარისი მარაგი. ხელმისაწვდომია ${formatKg(currentStock)}`);
+    }
+
+    const nextAmount = operationType === "შეტანა" ? currentStock + qty : currentStock - qty;
+    tx.update(productRef, {
+      [key]: normalizeKg(nextAmount),
+      updatedAt: nowIso()
+    });
+
+    const employeeName = `${empSnap.data().firstName} ${empSnap.data().lastName}`;
+    const logRef = doc(refs.logs);
+    tx.set(logRef, {
+      operationId,
+      timestamp: nowIso(),
+      employeeId,
+      employeeName,
+      operationType,
+      productId,
+      productName: productSnap.data().name,
+      storage,
+      quantityKg: qty,
+      comment: comment || "",
+      createdAt: serverTimestamp()
+    });
+
+    tx.set(opRef, {
+      createdAt: serverTimestamp(),
+      timestamp: nowIso(),
+      productId,
+      operationType
+    });
+  });
+}
+
 async function continueWithCode() {
   if (state.operationInProgress) return;
   const code = document.getElementById("code-input").value.trim();
@@ -537,12 +630,6 @@ async function continueWithCode() {
 
   if (!code) {
     error.textContent = "შეიყვანეთ თანამშრომლის კოდი";
-    error.classList.remove("hidden");
-    return;
-  }
-  const employee = getEmployeeByCode(code);
-  if (!employee) {
-    error.textContent = "არასწორი კოდი. სცადეთ თავიდან";
     error.classList.remove("hidden");
     return;
   }
@@ -557,31 +644,28 @@ async function continueWithCode() {
   btn.disabled = true;
   btn.textContent = "მიმდინარეობს...";
 
-  const result = applyOperationAtomic({ ...state.pendingOperation, employee });
+  try {
+    await performOperationWithTransaction({ ...state.pendingOperation, code });
+    closeCodeModal();
+    state.pendingOperation = null;
 
-  btn.disabled = false;
-  btn.textContent = "გაგრძელება";
-  state.operationInProgress = false;
+    document.getElementById("op-product").value = "";
+    document.getElementById("op-quantity").value = "";
+    document.getElementById("op-comment").value = "";
+    updateCurrentStockCard();
 
-  if (!result.ok) {
-    error.textContent = result.error;
+    showToast("ოპერაცია წარმატებით დასრულდა");
+  } catch (e) {
+    error.textContent = e.message || "ოპერაციის შესრულება ვერ მოხერხდა";
     error.classList.remove("hidden");
-    return;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "გაგრძელება";
+    state.operationInProgress = false;
   }
-
-  closeCodeModal();
-  state.pendingOperation = null;
-
-  document.getElementById("op-product").value = "";
-  document.getElementById("op-quantity").value = "";
-  document.getElementById("op-comment").value = "";
-  updateCurrentStockCard();
-
-  showToast("ოპერაცია წარმატებით დასრულდა");
-  renderCurrentView();
 }
 
-function addProduct() {
+async function addProduct() {
   const input = document.getElementById("new-product");
   const name = input.value.trim();
   if (!name) {
@@ -595,27 +679,19 @@ function addProduct() {
     return;
   }
 
-  const next = {
-    ...state.data,
-    products: [
-      ...state.data.products,
-      {
-        id: genId("prd"),
-        name,
-        stocks: { box: 0, twoSpace: 0 },
-        createdAt: nowIso(),
-        updatedAt: nowIso()
-      }
-    ]
-  };
-  saveData(next);
+  await addDoc(refs.products, {
+    name,
+    nameLower: name.toLowerCase(),
+    boxStock: 0,
+    twoSpaceStock: 0,
+    createdAt: nowIso(),
+    updatedAt: nowIso()
+  });
   input.value = "";
   showToast("პროდუქტი დაემატა");
-  refreshProductDropdown();
-  renderCurrentView();
 }
 
-function addEmployee() {
+async function addEmployee() {
   const first = document.getElementById("new-emp-first").value.trim();
   const last = document.getElementById("new-emp-last").value.trim();
   const code = document.getElementById("new-emp-code").value.trim();
@@ -625,32 +701,37 @@ function addEmployee() {
     return;
   }
 
-  const codeExists = state.data.employees.some((e) => e.code.toLowerCase() === code.toLowerCase());
-  if (codeExists) {
-    showToast("ეს კოდი უკვე გამოყენებულია", "error");
-    return;
-  }
+  const codeLower = normalizeCode(code);
 
-  const next = {
-    ...state.data,
-    employees: [
-      ...state.data.employees,
-      {
-        id: genId("emp"),
+  try {
+    await runTransaction(db, async (tx) => {
+      const codeRef = doc(refs.employeeCodes, codeLower);
+      const codeSnap = await tx.get(codeRef);
+      if (codeSnap.exists()) throw new Error("ეს კოდი უკვე გამოყენებულია");
+
+      const empRef = doc(refs.employees);
+      tx.set(empRef, {
         firstName: first,
         lastName: last,
         code,
+        codeLower,
         createdAt: nowIso()
-      }
-    ]
-  };
+      });
 
-  saveData(next);
-  document.getElementById("new-emp-first").value = "";
-  document.getElementById("new-emp-last").value = "";
-  document.getElementById("new-emp-code").value = "";
-  showToast("თანამშრომელი დაემატა");
-  renderCurrentView();
+      tx.set(codeRef, {
+        employeeId: empRef.id,
+        code,
+        createdAt: nowIso()
+      });
+    });
+
+    document.getElementById("new-emp-first").value = "";
+    document.getElementById("new-emp-last").value = "";
+    document.getElementById("new-emp-code").value = "";
+    showToast("თანამშრომელი დაემატა");
+  } catch (e) {
+    showToast(e.message || "თანამშრომლის დამატება ვერ მოხერხდა", "error");
+  }
 }
 
 function openDeleteModal(target) {
@@ -669,38 +750,41 @@ function closeDeleteModal() {
   state.deleteTarget = null;
 }
 
-function deleteTargetEntity() {
+async function deleteTargetEntity() {
   if (!state.deleteTarget) return;
 
-  if (state.deleteTarget.type === "product") {
-    const usedInLogs = state.data.logs.some((l) => l.productId === state.deleteTarget.id);
-    if (usedInLogs) {
-      showToast("პროდუქტი ლოგში გამოიყენება და წაშლა შეუძლებელია", "error");
-      closeDeleteModal();
-      return;
+  try {
+    if (state.deleteTarget.type === "product") {
+      const usedInLogs = state.data.logs.some((l) => l.productId === state.deleteTarget.id);
+      if (usedInLogs) {
+        showToast("პროდუქტი ლოგში გამოიყენება და წაშლა შეუძლებელია", "error");
+        closeDeleteModal();
+        return;
+      }
+      await deleteDoc(doc(refs.products, state.deleteTarget.id));
+    } else {
+      const usedInLogs = state.data.logs.some((l) => l.employeeId === state.deleteTarget.id);
+      if (usedInLogs) {
+        showToast("თანამშრომელი ლოგში გამოიყენება და წაშლა შეუძლებელია", "error");
+        closeDeleteModal();
+        return;
+      }
+
+      const emp = getEmployeeById(state.deleteTarget.id);
+      if (!emp) throw new Error("თანამშრომელი ვერ მოიძებნა");
+
+      await runTransaction(db, async (tx) => {
+        tx.delete(doc(refs.employees, emp.id));
+        tx.delete(doc(refs.employeeCodes, normalizeCode(emp.code)));
+      });
     }
 
-    saveData({
-      ...state.data,
-      products: state.data.products.filter((p) => p.id !== state.deleteTarget.id)
-    });
-  } else {
-    const usedInLogs = state.data.logs.some((l) => l.employeeId === state.deleteTarget.id);
-    if (usedInLogs) {
-      showToast("თანამშრომელი ლოგში გამოიყენება და წაშლა შეუძლებელია", "error");
-      closeDeleteModal();
-      return;
-    }
-
-    saveData({
-      ...state.data,
-      employees: state.data.employees.filter((e) => e.id !== state.deleteTarget.id)
-    });
+    closeDeleteModal();
+    showToast("ჩანაწერი წაიშალა");
+  } catch (e) {
+    closeDeleteModal();
+    showToast(e.message || "წაშლა ვერ მოხერხდა", "error");
   }
-
-  closeDeleteModal();
-  showToast("ჩანაწერი წაიშალა");
-  renderCurrentView();
 }
 
 function openEditModal(target) {
@@ -735,64 +819,76 @@ function closeEditModal() {
   state.editTarget = null;
 }
 
-function saveEditModal() {
+async function saveEditModal() {
   if (!state.editTarget) return;
 
-  if (state.editTarget.type === "product") {
-    const name = document.getElementById("edit-product-name").value.trim();
-    if (!name) {
-      showToast("შეიყვანეთ პროდუქტის სახელი", "error");
-      return;
+  try {
+    if (state.editTarget.type === "product") {
+      const name = document.getElementById("edit-product-name").value.trim();
+      if (!name) {
+        showToast("შეიყვანეთ პროდუქტის სახელი", "error");
+        return;
+      }
+
+      const duplicate = state.data.products.some((p) => p.id !== state.editTarget.id && p.name.toLowerCase() === name.toLowerCase());
+      if (duplicate) {
+        showToast("ასეთი სახელი უკვე არსებობს", "error");
+        return;
+      }
+
+      await updateDoc(doc(refs.products, state.editTarget.id), {
+        name,
+        nameLower: name.toLowerCase(),
+        updatedAt: nowIso()
+      });
+    } else {
+      const firstName = document.getElementById("edit-emp-first").value.trim();
+      const lastName = document.getElementById("edit-emp-last").value.trim();
+      const code = document.getElementById("edit-emp-code").value.trim();
+
+      if (!firstName || !lastName || !code) {
+        showToast("შეავსეთ ყველა ველი", "error");
+        return;
+      }
+
+      const codeLower = normalizeCode(code);
+      const empId = state.editTarget.id;
+      const currentEmp = getEmployeeById(empId);
+      if (!currentEmp) throw new Error("თანამშრომელი ვერ მოიძებნა");
+
+      await runTransaction(db, async (tx) => {
+        const oldCodeLower = normalizeCode(currentEmp.code);
+        const newCodeRef = doc(refs.employeeCodes, codeLower);
+        const newCodeSnap = await tx.get(newCodeRef);
+
+        if (newCodeSnap.exists() && newCodeSnap.data().employeeId !== empId) {
+          throw new Error("ეს კოდი უკვე გამოყენებულია");
+        }
+
+        tx.update(doc(refs.employees, empId), {
+          firstName,
+          lastName,
+          code,
+          codeLower
+        });
+
+        if (oldCodeLower !== codeLower) {
+          tx.delete(doc(refs.employeeCodes, oldCodeLower));
+        }
+
+        tx.set(newCodeRef, {
+          employeeId: empId,
+          code,
+          createdAt: currentEmp.createdAt || nowIso()
+        });
+      });
     }
 
-    const duplicate = state.data.products.some((p) => p.id !== state.editTarget.id && p.name.toLowerCase() === name.toLowerCase());
-    if (duplicate) {
-      showToast("ასეთი სახელი უკვე არსებობს", "error");
-      return;
-    }
-
-    saveData({
-      ...state.data,
-      products: state.data.products.map((p) =>
-        p.id === state.editTarget.id ? { ...p, name, updatedAt: nowIso() } : p
-      ),
-      logs: state.data.logs.map((l) =>
-        l.productId === state.editTarget.id ? { ...l, productName: name } : l
-      )
-    });
-  } else {
-    const firstName = document.getElementById("edit-emp-first").value.trim();
-    const lastName = document.getElementById("edit-emp-last").value.trim();
-    const code = document.getElementById("edit-emp-code").value.trim();
-
-    if (!firstName || !lastName || !code) {
-      showToast("შეავსეთ ყველა ველი", "error");
-      return;
-    }
-
-    const duplicateCode = state.data.employees.some(
-      (e) => e.id !== state.editTarget.id && e.code.toLowerCase() === code.toLowerCase()
-    );
-    if (duplicateCode) {
-      showToast("ეს კოდი უკვე გამოყენებულია", "error");
-      return;
-    }
-
-    const employeeName = `${firstName} ${lastName}`;
-    saveData({
-      ...state.data,
-      employees: state.data.employees.map((e) =>
-        e.id === state.editTarget.id ? { ...e, firstName, lastName, code } : e
-      ),
-      logs: state.data.logs.map((l) =>
-        l.employeeId === state.editTarget.id ? { ...l, employeeName } : l
-      )
-    });
+    closeEditModal();
+    showToast("ცვლილება შენახულია");
+  } catch (e) {
+    showToast(e.message || "ცვლილების შენახვა ვერ მოხერხდა", "error");
   }
-
-  closeEditModal();
-  showToast("ცვლილება შენახულია");
-  renderCurrentView();
 }
 
 function bindOperationButtons() {
@@ -919,21 +1015,22 @@ function bindEvents() {
     });
   });
 
-  window.addEventListener("storage", (event) => {
-    if (event.key === STORAGE_KEY) {
-      state.data = loadData();
-      renderCurrentView();
-    }
-  });
-
   bindOperationButtons();
 }
 
-function init() {
-  state.data = loadData();
+async function init() {
   bindEvents();
   setRole("user");
   setView("stock");
+
+  try {
+    await ensureBootstrapData();
+    startRealtimeListeners();
+    showToast("Firebase კავშირი აქტიურია", "info");
+  } catch (e) {
+    console.error(e);
+    showToast("Firebase კავშირის შეცდომა", "error");
+  }
 }
 
 init();

@@ -70,7 +70,7 @@
             <div>
               <label for="op-quantity" class="mb-2 block text-sm font-semibold text-slate-700">რაოდენობა (კგ)</label>
               <input id="op-quantity" type="text" readonly inputmode="none" placeholder="0.00" class="w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-center text-3xl font-bold outline-none transition focus:border-blue-500" />
-              <div id="quantity-keypad" class="mt-2 grid grid-cols-3 gap-2">
+              <div id="quantity-keypad" class="mt-2 hidden grid-cols-3 gap-2">
                 <button type="button" class="qty-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="1">1</button>
                 <button type="button" class="qty-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="2">2</button>
                 <button type="button" class="qty-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="3">3</button>
@@ -80,9 +80,11 @@
                 <button type="button" class="qty-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="7">7</button>
                 <button type="button" class="qty-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="8">8</button>
                 <button type="button" class="qty-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="9">9</button>
+                <button type="button" class="qty-key rounded-xl bg-slate-200 px-3 py-3 text-lg font-bold text-slate-700" data-key="clear">გასუფთავება</button>
                 <button type="button" class="qty-key rounded-xl bg-slate-200 px-3 py-3 text-lg font-bold text-slate-700" data-key=".">.</button>
                 <button type="button" class="qty-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="0">0</button>
                 <button type="button" class="qty-key rounded-xl bg-slate-200 px-3 py-3 text-lg font-bold text-slate-700" data-key="back">⌫</button>
+                <button type="button" class="qty-key col-span-3 rounded-xl bg-blue-100 px-3 py-3 text-base font-bold text-blue-700" data-key="close">დახურვა</button>
               </div>
             </div>
 

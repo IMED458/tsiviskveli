@@ -673,6 +673,14 @@ function updateQuantityInputFromKeypad(key) {
   if (!input) return;
 
   let current = String(input.value || "");
+  if (key === "close") {
+    closeQuantityKeypad();
+    return;
+  }
+  if (key === "clear") {
+    input.value = "";
+    return;
+  }
   if (key === "back") {
     input.value = current.slice(0, -1);
     return;
@@ -702,6 +710,20 @@ function updateQuantityInputFromKeypad(key) {
   input.value = `${current}${key}`;
 }
 
+function openQuantityKeypad() {
+  const keypad = document.getElementById("quantity-keypad");
+  if (!keypad) return;
+  keypad.classList.remove("hidden");
+  keypad.classList.add("grid");
+}
+
+function closeQuantityKeypad() {
+  const keypad = document.getElementById("quantity-keypad");
+  if (!keypad) return;
+  keypad.classList.add("hidden");
+  keypad.classList.remove("grid");
+}
+
 function bindNumericKeypad(containerId, applyFn) {
   const container = document.getElementById(containerId);
   if (!container) return;
@@ -713,11 +735,7 @@ function bindNumericKeypad(containerId, applyFn) {
     if (!key) return;
     applyFn(key);
   };
-  if (window.PointerEvent) {
-    container.addEventListener("pointerup", onPress);
-  } else {
-    container.addEventListener("click", onPress);
-  }
+  container.addEventListener("click", onPress);
 }
 
 async function performOperationWithTransaction({ operationId, productId, operationType, storage, quantityKg, comment, code }) {
@@ -809,6 +827,7 @@ async function continueWithCode() {
     document.getElementById("op-product").value = "";
     document.getElementById("op-quantity").value = "";
     document.getElementById("op-comment").value = "";
+    closeQuantityKeypad();
     updateCurrentStockCard();
 
     showToast("ოპერაცია წარმატებით დასრულდა");
@@ -1269,6 +1288,7 @@ function bindEvents() {
   });
 
   document.getElementById("op-product").addEventListener("change", updateCurrentStockCard);
+  document.getElementById("op-quantity").addEventListener("click", openQuantityKeypad);
   document.getElementById("op-submit-btn").addEventListener("click", openCodeModal);
 
   document.getElementById("code-cancel").addEventListener("click", () => {
@@ -1281,6 +1301,17 @@ function bindEvents() {
   });
   bindNumericKeypad("code-keypad", updateCodeInputFromKeypad);
   bindNumericKeypad("quantity-keypad", updateQuantityInputFromKeypad);
+
+  document.addEventListener("click", (e) => {
+    const keypad = document.getElementById("quantity-keypad");
+    const qtyInput = document.getElementById("op-quantity");
+    if (!keypad || !qtyInput) return;
+    const clickedInsideKeypad = keypad.contains(e.target);
+    const clickedInput = qtyInput.contains(e.target);
+    if (!clickedInsideKeypad && !clickedInput) {
+      closeQuantityKeypad();
+    }
+  });
 
   document.getElementById("add-product-btn").addEventListener("click", addProduct);
   document.getElementById("new-product").addEventListener("keydown", (e) => {

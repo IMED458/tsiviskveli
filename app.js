@@ -70,8 +70,7 @@ const state = {
   },
   deleteTarget: null,
   editTarget: null,
-  adminAuthenticated: false,
-  quantityKeypadOpenedAt: 0
+  adminAuthenticated: false
 };
 
 const refs = {
@@ -652,94 +651,6 @@ function closeCodeModal() {
   document.getElementById("code-modal").classList.add("hidden");
 }
 
-function updateCodeInputFromKeypad(key) {
-  const input = document.getElementById("code-input");
-  if (!input) return;
-  const current = input.value || "";
-  if (key === "clear") {
-    input.value = "";
-    return;
-  }
-  if (key === "back") {
-    input.value = current.slice(0, -1);
-    return;
-  }
-  if (/^[0-9]$/.test(key)) {
-    if (current.length >= 12) return;
-    input.value = `${current}${key}`;
-  }
-}
-
-function updateQuantityInputFromKeypad(key) {
-  const input = document.getElementById("op-quantity");
-  if (!input) return;
-
-  let current = String(input.value || "");
-  if (key === "close") {
-    closeQuantityKeypad();
-    return;
-  }
-  if (key === "clear") {
-    input.value = "";
-    return;
-  }
-  if (key === "back") {
-    input.value = current.slice(0, -1);
-    return;
-  }
-
-  if (key === ".") {
-    if (!current) {
-      input.value = "0.";
-      return;
-    }
-    if (current.includes(".")) return;
-    input.value = `${current}.`;
-    return;
-  }
-
-  if (!/^[0-9]$/.test(key)) return;
-
-  if (current === "0") current = "";
-
-  if (current.includes(".")) {
-    const decimal = current.split(".")[1] || "";
-    if (decimal.length >= 2) return;
-  } else if (current.length >= 7) {
-    return;
-  }
-
-  input.value = `${current}${key}`;
-}
-
-function openQuantityKeypad() {
-  const keypad = document.getElementById("quantity-keypad");
-  if (!keypad) return;
-  state.quantityKeypadOpenedAt = Date.now();
-  keypad.classList.remove("hidden");
-  keypad.classList.add("grid");
-}
-
-function closeQuantityKeypad() {
-  const keypad = document.getElementById("quantity-keypad");
-  if (!keypad) return;
-  keypad.classList.add("hidden");
-  keypad.classList.remove("grid");
-}
-
-function bindNumericKeypad(containerId, applyFn) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  container.querySelectorAll("button[data-key]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.preventDefault();
-      const key = btn.dataset.key;
-      if (!key) return;
-      applyFn(key);
-    });
-  });
-}
-
 async function performOperationWithTransaction({ operationId, productId, operationType, storage, quantityKg, comment, code }) {
   const codeLower = normalizeCode(code);
   const opRef = doc(refs.operations, operationId);
@@ -829,7 +740,6 @@ async function continueWithCode() {
     document.getElementById("op-product").value = "";
     document.getElementById("op-quantity").value = "";
     document.getElementById("op-comment").value = "";
-    closeQuantityKeypad();
     updateCurrentStockCard();
 
     showToast("ოპერაცია წარმატებით დასრულდა");
@@ -1290,16 +1200,6 @@ function bindEvents() {
   });
 
   document.getElementById("op-product").addEventListener("change", updateCurrentStockCard);
-  const qtyInput = document.getElementById("op-quantity");
-  const openQtyHandler = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    openQuantityKeypad();
-  };
-  qtyInput.addEventListener("focus", openQtyHandler);
-  qtyInput.addEventListener("click", openQtyHandler);
-  qtyInput.addEventListener("pointerdown", openQtyHandler);
-  qtyInput.addEventListener("touchend", openQtyHandler, { passive: false });
   document.getElementById("op-submit-btn").addEventListener("click", openCodeModal);
 
   document.getElementById("code-cancel").addEventListener("click", () => {
@@ -1312,18 +1212,6 @@ function bindEvents() {
   });
   document.getElementById("code-input").addEventListener("input", (e) => {
     e.target.value = String(e.target.value || "").replace(/\D+/g, "");
-  });
-  bindNumericKeypad("code-keypad", updateCodeInputFromKeypad);
-  bindNumericKeypad("quantity-keypad", updateQuantityInputFromKeypad);
-
-  document.addEventListener("click", (e) => {
-    const keypad = document.getElementById("quantity-keypad");
-    if (!keypad) return;
-    if (Date.now() - state.quantityKeypadOpenedAt < 200) return;
-    const clickedInside = e.target.closest("#quantity-keypad, #op-quantity");
-    if (!clickedInside) {
-      closeQuantityKeypad();
-    }
   });
 
   document.getElementById("add-product-btn").addEventListener("click", addProduct);

@@ -70,7 +70,8 @@ const state = {
   },
   deleteTarget: null,
   editTarget: null,
-  adminAuthenticated: false
+  adminAuthenticated: false,
+  quantityKeypadOpenedAt: 0
 };
 
 const refs = {
@@ -644,6 +645,7 @@ function openCodeModal() {
   document.getElementById("code-input").value = "";
   document.getElementById("code-error").classList.add("hidden");
   document.getElementById("code-modal").classList.remove("hidden");
+  document.getElementById("code-input").focus();
 }
 
 function closeCodeModal() {
@@ -713,6 +715,7 @@ function updateQuantityInputFromKeypad(key) {
 function openQuantityKeypad() {
   const keypad = document.getElementById("quantity-keypad");
   if (!keypad) return;
+  state.quantityKeypadOpenedAt = Date.now();
   keypad.classList.remove("hidden");
   keypad.classList.add("grid");
 }
@@ -727,15 +730,14 @@ function closeQuantityKeypad() {
 function bindNumericKeypad(containerId, applyFn) {
   const container = document.getElementById(containerId);
   if (!container) return;
-  const onPress = (e) => {
-    const btn = e.target.closest("button[data-key]");
-    if (!btn || !container.contains(btn)) return;
-    e.preventDefault();
-    const key = btn.dataset.key;
-    if (!key) return;
-    applyFn(key);
-  };
-  container.addEventListener("click", onPress);
+  container.querySelectorAll("button[data-key]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const key = btn.dataset.key;
+      if (!key) return;
+      applyFn(key);
+    });
+  });
 }
 
 async function performOperationWithTransaction({ operationId, productId, operationType, storage, quantityKg, comment, code }) {
@@ -1294,9 +1296,10 @@ function bindEvents() {
     e.stopPropagation();
     openQuantityKeypad();
   };
+  qtyInput.addEventListener("focus", openQtyHandler);
   qtyInput.addEventListener("click", openQtyHandler);
   qtyInput.addEventListener("pointerdown", openQtyHandler);
-  qtyInput.addEventListener("touchstart", openQtyHandler, { passive: false });
+  qtyInput.addEventListener("touchend", openQtyHandler, { passive: false });
   document.getElementById("op-submit-btn").addEventListener("click", openCodeModal);
 
   document.getElementById("code-cancel").addEventListener("click", () => {
@@ -1307,12 +1310,16 @@ function bindEvents() {
   document.getElementById("code-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") continueWithCode();
   });
+  document.getElementById("code-input").addEventListener("input", (e) => {
+    e.target.value = String(e.target.value || "").replace(/\D+/g, "");
+  });
   bindNumericKeypad("code-keypad", updateCodeInputFromKeypad);
   bindNumericKeypad("quantity-keypad", updateQuantityInputFromKeypad);
 
   document.addEventListener("click", (e) => {
     const keypad = document.getElementById("quantity-keypad");
     if (!keypad) return;
+    if (Date.now() - state.quantityKeypadOpenedAt < 200) return;
     const clickedInside = e.target.closest("#quantity-keypad, #op-quantity");
     if (!clickedInside) {
       closeQuantityKeypad();

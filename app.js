@@ -109,6 +109,19 @@ function normalizeCode(code) {
   return String(code || "").trim().toLowerCase();
 }
 
+function generateOperationId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `op_${crypto.randomUUID()}`;
+  }
+  if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    return `op_${hex}`;
+  }
+  return `op_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+}
+
 function storageToKey(storage) {
   return storage === "ბოქსი" ? "boxStock" : "twoSpaceStock";
 }
@@ -620,7 +633,7 @@ function openCodeModal() {
   }
 
   state.pendingOperation = {
-    operationId: `op_${crypto.randomUUID()}`,
+    operationId: generateOperationId(),
     productId,
     quantityKg: normalizeKg(quantity),
     comment,
@@ -731,7 +744,11 @@ async function continueWithCode() {
 
     showToast("ოპერაცია წარმატებით დასრულდა");
   } catch (e) {
-    error.textContent = e.message || "ოპერაციის შესრულება ვერ მოხერხდა";
+    if (e && e.code === "permission-denied") {
+      error.textContent = "წვდომა შეზღუდულია (Firestore Rules). გატანა/შეტანის ჩაწერა დაშვებული უნდა იყოს.";
+    } else {
+      error.textContent = e.message || "ოპერაციის შესრულება ვერ მოხერხდა";
+    }
     error.classList.remove("hidden");
   } finally {
     btn.disabled = false;

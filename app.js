@@ -848,6 +848,32 @@ function closeDeleteModal() {
   state.deleteTarget = null;
 }
 
+function openLogDeleteFinalModal() {
+  document.getElementById("log-delete-final-modal").classList.remove("hidden");
+}
+
+function closeLogDeleteFinalModal() {
+  document.getElementById("log-delete-final-modal").classList.add("hidden");
+}
+
+async function confirmLogDeleteFinal() {
+  if (!requireAdmin("ლოგის წაშლა")) return;
+  if (!state.deleteTarget || state.deleteTarget.type !== "log") {
+    closeLogDeleteFinalModal();
+    return;
+  }
+  try {
+    await deleteDoc(doc(refs.logs, state.deleteTarget.id));
+    closeLogDeleteFinalModal();
+    closeDeleteModal();
+    showToast("ჩანაწერი წაიშალა");
+  } catch (e) {
+    closeLogDeleteFinalModal();
+    closeDeleteModal();
+    showToast(e.message || "წაშლა ვერ მოხერხდა", "error");
+  }
+}
+
 async function deleteTargetEntity() {
   if (!requireAdmin("წაშლა")) return;
   if (!state.deleteTarget) return;
@@ -877,11 +903,8 @@ async function deleteTargetEntity() {
         tx.delete(doc(refs.employeeCodes, normalizeCode(emp.code)));
       });
     } else if (state.deleteTarget.type === "log") {
-      const confirmed = window.confirm("ყურადღება: ლოგის ჩანაწერი წაიშლება საბოლოოდ. გაგრძელება?");
-      if (!confirmed) {
-        return;
-      }
-      await deleteDoc(doc(refs.logs, state.deleteTarget.id));
+      openLogDeleteFinalModal();
+      return;
     } else {
       throw new Error("წაშლის ტიპი არასწორია");
     }
@@ -1244,6 +1267,8 @@ function bindEvents() {
 
   document.getElementById("delete-cancel").addEventListener("click", closeDeleteModal);
   document.getElementById("delete-confirm").addEventListener("click", deleteTargetEntity);
+  document.getElementById("log-delete-final-cancel").addEventListener("click", closeLogDeleteFinalModal);
+  document.getElementById("log-delete-final-confirm").addEventListener("click", confirmLogDeleteFinal);
 
   document.getElementById("edit-cancel").addEventListener("click", closeEditModal);
   document.getElementById("edit-save").addEventListener("click", saveEditModal);

@@ -1288,7 +1288,15 @@ function bindEvents() {
   });
 
   document.getElementById("op-product").addEventListener("change", updateCurrentStockCard);
-  document.getElementById("op-quantity").addEventListener("click", openQuantityKeypad);
+  const qtyInput = document.getElementById("op-quantity");
+  const openQtyHandler = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openQuantityKeypad();
+  };
+  qtyInput.addEventListener("click", openQtyHandler);
+  qtyInput.addEventListener("pointerdown", openQtyHandler);
+  qtyInput.addEventListener("touchstart", openQtyHandler, { passive: false });
   document.getElementById("op-submit-btn").addEventListener("click", openCodeModal);
 
   document.getElementById("code-cancel").addEventListener("click", () => {
@@ -1304,11 +1312,9 @@ function bindEvents() {
 
   document.addEventListener("click", (e) => {
     const keypad = document.getElementById("quantity-keypad");
-    const qtyInput = document.getElementById("op-quantity");
-    if (!keypad || !qtyInput) return;
-    const clickedInsideKeypad = keypad.contains(e.target);
-    const clickedInput = qtyInput.contains(e.target);
-    if (!clickedInsideKeypad && !clickedInput) {
+    if (!keypad) return;
+    const clickedInside = e.target.closest("#quantity-keypad, #op-quantity");
+    if (!clickedInside) {
       closeQuantityKeypad();
     }
   });

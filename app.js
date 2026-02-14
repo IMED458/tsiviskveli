@@ -877,31 +877,11 @@ async function deleteTargetEntity() {
         tx.delete(doc(refs.employeeCodes, normalizeCode(emp.code)));
       });
     } else if (state.deleteTarget.type === "log") {
-      const logRef = doc(refs.logs, state.deleteTarget.id);
-      await runTransaction(db, async (tx) => {
-        const logSnap = await tx.get(logRef);
-        if (!logSnap.exists()) throw new Error("ლოგი ვერ მოიძებნა");
-
-        const log = logSnap.data();
-        const productRef = doc(refs.products, log.productId);
-        const productSnap = await tx.get(productRef);
-        if (!productSnap.exists()) throw new Error("პროდუქტი ვერ მოიძებნა");
-
-        const key = storageToKey(log.storage);
-        const current = normalizeKg(productSnap.data()[key] || 0);
-        const qty = normalizeKg(log.quantityKg || 0);
-
-        const nextStock = log.operationType === "შეტანა" ? current - qty : current + qty;
-        if (nextStock < 0) {
-          throw new Error("ლოგის წაშლა ვერ ხერხდება, რადგან მარაგი უარყოფითში გადავა");
-        }
-
-        tx.update(productRef, {
-          [key]: normalizeKg(nextStock),
-          updatedAt: nowIso()
-        });
-        tx.delete(logRef);
-      });
+      const confirmed = window.confirm("ყურადღება: ლოგის ჩანაწერი წაიშლება საბოლოოდ. გაგრძელება?");
+      if (!confirmed) {
+        return;
+      }
+      await deleteDoc(doc(refs.logs, state.deleteTarget.id));
     } else {
       throw new Error("წაშლის ტიპი არასწორია");
     }

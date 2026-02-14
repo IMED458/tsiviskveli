@@ -668,6 +668,58 @@ function updateCodeInputFromKeypad(key) {
   }
 }
 
+function updateQuantityInputFromKeypad(key) {
+  const input = document.getElementById("op-quantity");
+  if (!input) return;
+
+  let current = String(input.value || "");
+  if (key === "back") {
+    input.value = current.slice(0, -1);
+    return;
+  }
+
+  if (key === ".") {
+    if (!current) {
+      input.value = "0.";
+      return;
+    }
+    if (current.includes(".")) return;
+    input.value = `${current}.`;
+    return;
+  }
+
+  if (!/^[0-9]$/.test(key)) return;
+
+  if (current === "0") current = "";
+
+  if (current.includes(".")) {
+    const decimal = current.split(".")[1] || "";
+    if (decimal.length >= 2) return;
+  } else if (current.length >= 7) {
+    return;
+  }
+
+  input.value = `${current}${key}`;
+}
+
+function bindNumericKeypad(containerId, applyFn) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const onPress = (e) => {
+    const btn = e.target.closest("button[data-key]");
+    if (!btn || !container.contains(btn)) return;
+    e.preventDefault();
+    const key = btn.dataset.key;
+    if (!key) return;
+    applyFn(key);
+  };
+  if (window.PointerEvent) {
+    container.addEventListener("pointerup", onPress);
+  } else {
+    container.addEventListener("click", onPress);
+  }
+}
+
 async function performOperationWithTransaction({ operationId, productId, operationType, storage, quantityKg, comment, code }) {
   const codeLower = normalizeCode(code);
   const opRef = doc(refs.operations, operationId);
@@ -1227,11 +1279,8 @@ function bindEvents() {
   document.getElementById("code-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") continueWithCode();
   });
-  document.getElementById("code-keypad").addEventListener("click", (e) => {
-    const key = e.target.dataset.key;
-    if (!key) return;
-    updateCodeInputFromKeypad(key);
-  });
+  bindNumericKeypad("code-keypad", updateCodeInputFromKeypad);
+  bindNumericKeypad("quantity-keypad", updateQuantityInputFromKeypad);
 
   document.getElementById("add-product-btn").addEventListener("click", addProduct);
   document.getElementById("new-product").addEventListener("keydown", (e) => {

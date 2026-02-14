@@ -644,11 +644,28 @@ function openCodeModal() {
   document.getElementById("code-input").value = "";
   document.getElementById("code-error").classList.add("hidden");
   document.getElementById("code-modal").classList.remove("hidden");
-  document.getElementById("code-input").focus();
 }
 
 function closeCodeModal() {
   document.getElementById("code-modal").classList.add("hidden");
+}
+
+function updateCodeInputFromKeypad(key) {
+  const input = document.getElementById("code-input");
+  if (!input) return;
+  const current = input.value || "";
+  if (key === "clear") {
+    input.value = "";
+    return;
+  }
+  if (key === "back") {
+    input.value = current.slice(0, -1);
+    return;
+  }
+  if (/^[0-9]$/.test(key)) {
+    if (current.length >= 12) return;
+    input.value = `${current}${key}`;
+  }
 }
 
 async function performOperationWithTransaction({ operationId, productId, operationType, storage, quantityKg, comment, code }) {
@@ -1209,6 +1226,11 @@ function bindEvents() {
   document.getElementById("code-continue").addEventListener("click", continueWithCode);
   document.getElementById("code-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") continueWithCode();
+  });
+  document.getElementById("code-keypad").addEventListener("click", (e) => {
+    const key = e.target.dataset.key;
+    if (!key) return;
+    updateCodeInputFromKeypad(key);
   });
 
   document.getElementById("add-product-btn").addEventListener("click", addProduct);

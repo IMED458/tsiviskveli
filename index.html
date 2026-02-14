@@ -164,8 +164,22 @@
       <div class="w-full max-w-sm rounded-2xl bg-white p-5 shadow-xl">
         <h3 class="text-center text-xl font-extrabold text-slate-800">დადასტურება</h3>
         <p class="mb-4 mt-1 text-center text-sm text-slate-600">შეიყვანე თანამშრომლის კოდი</p>
-        <input id="code-input" type="tel" inputmode="numeric" pattern="[0-9]*" enterkeyhint="done" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="mb-2 w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-center text-2xl font-bold outline-none transition focus:border-blue-500" placeholder="კოდი" />
+        <input id="code-input" type="text" readonly inputmode="none" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" class="mb-2 w-full rounded-xl border-2 border-slate-200 px-4 py-3 text-center text-2xl font-bold outline-none transition focus:border-blue-500" placeholder="კოდი" />
         <p id="code-error" class="mb-3 hidden text-center text-sm font-semibold text-red-600">კოდი არასწორია</p>
+        <div id="code-keypad" class="mb-3 grid grid-cols-3 gap-2">
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="1">1</button>
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="2">2</button>
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="3">3</button>
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="4">4</button>
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="5">5</button>
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="6">6</button>
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="7">7</button>
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="8">8</button>
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="9">9</button>
+          <button type="button" class="code-key rounded-xl bg-slate-200 px-3 py-3 text-lg font-bold text-slate-700" data-key="clear">გასუფთავება</button>
+          <button type="button" class="code-key rounded-xl bg-slate-100 px-3 py-3 text-xl font-bold text-slate-800" data-key="0">0</button>
+          <button type="button" class="code-key rounded-xl bg-slate-200 px-3 py-3 text-lg font-bold text-slate-700" data-key="back">⌫</button>
+        </div>
         <div class="grid grid-cols-2 gap-2">
           <button id="code-cancel" class="rounded-xl border-2 border-slate-300 px-3 py-3 font-semibold text-slate-700">გაუქმება</button>
           <button id="code-continue" class="rounded-xl bg-blue-600 px-3 py-3 font-semibold text-white">გაგრძელება</button>
